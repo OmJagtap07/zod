@@ -387,6 +387,14 @@ function getTupleRest(restSchema: JSONSchema._JSONSchema | undefined, ctx: Conve
 // the RFC 3339 full-time keyword, narrower than `z.iso.time()`; local because sharing it via `timeSource` pins that builder into every bundle (+139 B gzipped on a mini `z.boolean()`)
 const fullTime = /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
 
+// enum and const return early, so the keywords of the declared type (minLength, minimum, pattern, ...) never run; keep only the values that satisfy them. Without a type there is nothing to check against.
+function narrowToSchema<T>(values: T[], schema: JSONSchema.JSONSchema, ctx: ConversionContext): T[] {
+  if (!schema.type) return values;
+  const { enum: _enum, const: _const, ...rest } = schema;
+  const typed = convertBaseSchema(rest, ctx);
+  return values.filter((value) => typed.safeParse(value).success);
+}
+
 function convertBaseSchema(schema: JSONSchema.JSONSchema, ctx: ConversionContext): ZodType {
   // Handle unsupported features
   if (schema.not !== undefined) {
@@ -436,17 +444,14 @@ function convertBaseSchema(schema: JSONSchema.JSONSchema, ctx: ConversionContext
 
   // Handle enum
   if (schema.enum !== undefined) {
-    const enumValues = schema.enum;
+    const declared = schema.enum;
 
     // Special case: OpenAPI 3.0 null representation { type: "string", nullable: true, enum: [null] }
-    if (
-      ctx.version === "openapi-3.0" &&
-      schema.nullable === true &&
-      enumValues.length === 1 &&
-      enumValues[0] === null
-    ) {
+    if (ctx.version === "openapi-3.0" && schema.nullable === true && declared.length === 1 && declared[0] === null) {
       return z.null();
     }
+
+    const enumValues = narrowToSchema(declared, schema, ctx);
 
     if (enumValues.length === 0) {
       return z.never();
@@ -472,7 +477,7 @@ function convertBaseSchema(schema: JSONSchema.JSONSchema, ctx: ConversionContext
 
   // Handle const
   if (schema.const !== undefined) {
-    return z.literal(schema.const);
+    return narrowToSchema([schema.const], schema, ctx).length > 0 ? z.literal(schema.const) : z.never();
   }
 
   // Handle type
