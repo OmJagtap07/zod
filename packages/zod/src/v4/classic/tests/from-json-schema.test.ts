@@ -1465,3 +1465,34 @@ test("a carried subschema that references $defs is dropped rather than emitted d
   });
   expect(z.toJSONSchema(nested)).not.toHaveProperty("contains");
 });
+
+test("enum respects type-specific keywords", () => {
+  const schema = fromJSONSchema({ type: "string", enum: ["a", "bb"], minLength: 2 });
+  expect(() => schema.parse("a")).toThrow();
+  expect(schema.parse("bb")).toBe("bb");
+  expect(() => schema.parse("c")).toThrow();
+});
+
+test("const respects type-specific keywords", () => {
+  expect(() => fromJSONSchema({ type: "string", const: "a", minLength: 2 }).parse("a")).toThrow();
+  expect(fromJSONSchema({ type: "string", const: "ab", minLength: 2 }).parse("ab")).toBe("ab");
+});
+
+test("numeric enum respects minimum and maximum", () => {
+  const schema = fromJSONSchema({ type: "number", enum: [1, 5, 9], minimum: 3, maximum: 8 });
+  expect(() => schema.parse(1)).toThrow();
+  expect(schema.parse(5)).toBe(5);
+  expect(() => schema.parse(9)).toThrow();
+});
+
+test("enum respects pattern", () => {
+  const schema = fromJSONSchema({ type: "string", enum: ["abc", "xyz"], pattern: "^a" });
+  expect(schema.parse("abc")).toBe("abc");
+  expect(() => schema.parse("xyz")).toThrow();
+});
+
+test("enum whose values all violate the other keywords matches nothing", () => {
+  const schema = fromJSONSchema({ type: "string", enum: ["a", "b"], minLength: 2 });
+  expect(() => schema.parse("a")).toThrow();
+  expect(() => schema.parse("b")).toThrow();
+});
