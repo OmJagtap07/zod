@@ -639,6 +639,18 @@ function convertBaseSchema(schema: JSONSchema.JSONSchema, ctx: ConversionContext
         assignProp(shape, key, requiredSet.has(key) ? propZodSchema : propZodSchema.optional());
       }
 
+      // A required key with no entry in `properties` still has to be present. Give it the schema its value would fall under: patternProperties first, then additionalProperties.
+      for (const key of requiredSet) {
+        if (Object.prototype.hasOwnProperty.call(properties, key)) continue;
+        const matchesPattern = Object.keys(schema.patternProperties ?? {}).some((p) => new RegExp(p).test(key));
+        let implicit: ZodType = z.unknown();
+        if (!matchesPattern) {
+          if (schema.additionalProperties === false) implicit = z.never();
+          else if (additionalSchema) implicit = additionalSchema;
+        }
+        assignProp(shape, key, implicit);
+      }
+
       // Handle patternProperties
       if (schema.patternProperties) {
         // patternProperties: keys matching pattern must satisfy corresponding schema. Use loose records so non-matching keys pass through

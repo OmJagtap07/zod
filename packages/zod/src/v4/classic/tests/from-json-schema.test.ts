@@ -1465,3 +1465,60 @@ test("a carried subschema that references $defs is dropped rather than emitted d
   });
   expect(z.toJSONSchema(nested)).not.toHaveProperty("contains");
 });
+
+test("required keys not listed in properties are enforced", () => {
+  const schema = fromJSONSchema({ type: "object", required: ["x"] });
+  expect(() => schema.parse({})).toThrow();
+  expect(schema.parse({ x: 1 })).toEqual({ x: 1 });
+});
+
+test("required keys not in properties, mixed with listed properties", () => {
+  const schema = fromJSONSchema({
+    type: "object",
+    properties: { a: { type: "string" } },
+    required: ["a", "b"],
+  });
+  expect(() => schema.parse({ a: "foo" })).toThrow();
+  expect(schema.parse({ a: "foo", b: null })).toEqual({ a: "foo", b: null });
+});
+
+test("required key not in properties follows additionalProperties schema", () => {
+  const schema = fromJSONSchema({
+    type: "object",
+    required: ["x"],
+    additionalProperties: { type: "string" },
+  });
+  expect(() => schema.parse({})).toThrow();
+  expect(() => schema.parse({ x: 1 })).toThrow();
+  expect(schema.parse({ x: "a" })).toEqual({ x: "a" });
+});
+
+test("required key not in properties with additionalProperties: false is unsatisfiable", () => {
+  const schema = fromJSONSchema({ type: "object", required: ["x"], additionalProperties: false });
+  expect(() => schema.parse({})).toThrow();
+  expect(() => schema.parse({ x: 1 })).toThrow();
+});
+
+test("required key matching patternProperties", () => {
+  const schema = fromJSONSchema({
+    type: "object",
+    required: ["x"],
+    patternProperties: { "^x$": { type: "number" } },
+    additionalProperties: false,
+  });
+  expect(() => schema.parse({})).toThrow();
+  expect(() => schema.parse({ x: "a" })).toThrow();
+  expect(schema.parse({ x: 1 })).toEqual({ x: 1 });
+});
+
+test("required key matching no patternProperties with additionalProperties: false is unsatisfiable", () => {
+  const schema = fromJSONSchema({
+    type: "object",
+    required: ["y"],
+    patternProperties: { "^x$": { type: "number" } },
+    additionalProperties: false,
+  });
+  expect(() => schema.parse({})).toThrow();
+  expect(() => schema.parse({ y: 1 })).toThrow();
+  expect(() => schema.parse({ x: 1 })).toThrow(); // x is fine, but y is still missing
+});
