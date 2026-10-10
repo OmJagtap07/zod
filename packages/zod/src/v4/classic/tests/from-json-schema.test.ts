@@ -1465,3 +1465,38 @@ test("a carried subschema that references $defs is dropped rather than emitted d
   });
   expect(z.toJSONSchema(nested)).not.toHaveProperty("contains");
 });
+
+test("string keywords without a type constrain strings only", () => {
+  const schema = fromJSONSchema({ minLength: 2 });
+  expect(() => schema.parse("a")).toThrow();
+  expect(schema.parse("ab")).toBe("ab");
+  expect(schema.parse(5)).toBe(5);
+});
+
+test("number keywords without a type constrain numbers only", () => {
+  const schema = fromJSONSchema({ minimum: 3 });
+  expect(() => schema.parse(1)).toThrow();
+  expect(schema.parse(5)).toBe(5);
+  expect(schema.parse("a")).toBe("a");
+});
+
+test("object keywords without a type constrain objects only", () => {
+  const schema = fromJSONSchema({ properties: { a: { type: "string" } } });
+  expect(() => schema.parse({ a: 1 })).toThrow();
+  expect(schema.parse({ a: "x" })).toEqual({ a: "x" });
+  expect(schema.parse("x")).toBe("x");
+});
+
+test("array keywords without a type constrain arrays only", () => {
+  const schema = fromJSONSchema({ minItems: 2, items: { type: "number" } });
+  expect(() => schema.parse([1])).toThrow();
+  expect(schema.parse([1, 2])).toEqual([1, 2]);
+  expect(schema.parse("a")).toBe("a");
+});
+
+test("a schema with neither a type nor type keywords accepts anything", () => {
+  const schema = fromJSONSchema({ description: "anything" });
+  expect(schema.parse(5)).toBe(5);
+  expect(schema.parse(null)).toBe(null);
+  expect(schema.parse({ a: 1 })).toEqual({ a: 1 });
+});

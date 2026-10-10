@@ -387,6 +387,35 @@ function getTupleRest(restSchema: JSONSchema._JSONSchema | undefined, ctx: Conve
 // the RFC 3339 full-time keyword, narrower than `z.iso.time()`; local because sharing it via `timeSource` pins that builder into every bundle (+139 B gzipped on a mini `z.boolean()`)
 const fullTime = /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
 
+// keywords that only constrain instances of one JSON type; with none of them and no `type`, a schema accepts anything
+const TYPE_KEYWORDS = /*@__PURE__*/ new Set([
+  "minLength",
+  "maxLength",
+  "pattern",
+  "format",
+  "minimum",
+  "maximum",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
+  "multipleOf",
+  "properties",
+  "required",
+  "additionalProperties",
+  "patternProperties",
+  "propertyNames",
+  "minProperties",
+  "maxProperties",
+  "items",
+  "prefixItems",
+  "additionalItems",
+  "minItems",
+  "maxItems",
+  "uniqueItems",
+  "contains",
+  "minContains",
+  "maxContains",
+]);
+
 function convertBaseSchema(schema: JSONSchema.JSONSchema, ctx: ConversionContext): ZodType {
   // Handle unsupported features
   if (schema.not !== undefined) {
@@ -494,8 +523,9 @@ function convertBaseSchema(schema: JSONSchema.JSONSchema, ctx: ConversionContext
   }
 
   if (!type) {
-    // No type specified - empty schema (any)
-    return z.any();
+    // No type: keywords only constrain values of their own type, so expand over every JSON type and let each branch apply its own keywords
+    if (!Object.keys(schema).some((key) => TYPE_KEYWORDS.has(key))) return z.any();
+    return convertBaseSchema({ ...schema, type: ["string", "number", "boolean", "null", "object", "array"] }, ctx);
   }
 
   let zodSchema: ZodType;
